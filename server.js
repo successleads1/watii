@@ -7,6 +7,7 @@ const http = require('http');
 const express = require('express');
 const QRCode = require('qrcode');
 const pino = require('pino');
+const axios = require('axios'); // For DeepSeek API requests
 
 const {
   default: makeWASocket,
@@ -19,6 +20,49 @@ const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
+// DeepSeek API Key
+const DEEPSEEK_API_KEY = 'sk-bb30906f4e0d407bae6f58fdb464c451';
+
+// Function to interact with DeepSeek API
+async function sendToDeepSeek(message, context = '') {
+  try {
+    const systemPrompt = context || 'You are a helpful AI assistant.';
+    const englishInstruction = ' IMPORTANT: Always respond in English only, regardless of the language the user writes in.';
+    
+    const response = await axios.post('https://api.deepseek.com/v1/chat/completions', {
+      model: 'deepseek-chat',
+      messages: [
+        {
+          role: 'system',
+          content: systemPrompt + englishInstruction
+        },
+        {
+          role: 'user',
+          content: message
+        }
+      ],
+      max_tokens: 1000,
+      temperature: 0.7
+    }, {
+      headers: {
+        'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    return response.data.choices[0].message.content; // DeepSeek's response
+  } catch (error) {
+    console.error("Error communicating with DeepSeek:", error.response?.data || error.message);
+    return "I'm sorry, I couldn't understand that.";
+  }
+}
+
+// Health Check Endpoint
+// This will help Render monitor the health of your app
+app.get('/healthz', (req, res) => {
+  res.status(200).send('OK'); // Returns "OK" with a 200 status code to indicate the app is running
+});
+
 const server = http.createServer(app);
 const { Server } = require('socket.io');
 const io = new Server(server, {
@@ -30,13 +74,9 @@ const SESSIONS_DIR = path.join(__dirname, 'sessions');
 if (!fs.existsSync(SESSIONS_DIR)) fs.mkdirSync(SESSIONS_DIR, { recursive: true });
 
 const Sessions = new Map();
-/**
- * record = {
- *   id, sock, status, qr, messages[], startedAt
- * }
- */
+const logger = pino({ level: 'silent' });
 
-const logger = pino({ level: 'silent' }); // change to 'info' to see logs
+let isAIEnabled = true; // Track whether AI is enabled or paused
 
 function jidFromNumber(msisdn) {
   const digits = String(msisdn || '').replace(/\D/g, '');
@@ -145,7 +185,7 @@ async function startSession(sessionId, { auto = false } = {}) {
     }
   });
 
-  sock.ev.on('messages.upsert', (m) => {
+  sock.ev.on('messages.upsert', async (m) => {
     const msgs = m.messages || [];
     for (const msg of msgs) {
       const compact = {
@@ -163,6 +203,23 @@ async function startSession(sessionId, { auto = false } = {}) {
       record.messages.push(compact);
       if (record.messages.length > 50) record.messages.shift();
       broadcastMessage(record, compact);
+
+      // Auto-respond with AI if enabled and it's not from us
+      if (isAIEnabled && compact.text && !msg.key.fromMe) {
+        try {
+          const aiResponse = await sendToDeepSeek(
+            compact.text, 
+            "You are a professional sales agent helping to collect leads and provide information. You must always respond in English only, no matter what language the customer uses."
+          );
+          
+          // Send AI response back to the sender
+          if (aiResponse && record.sock) {
+            await record.sock.sendMessage(compact.from, { text: aiResponse });
+          }
+        } catch (error) {
+          console.error('Error sending AI response:', error);
+        }
+      }
     }
   });
 
@@ -209,18 +266,24 @@ app.post('/session/:id/send', async (req, res) => {
   }
 });
 
-app.post('/session/:id/logout', async (req, res) => {
-  const { id } = req.params;
-  const s = Sessions.get(id);
-  if (!s) return res.status(404).json({ ok: false, error: 'Session not found' });
-  try { if (s.sock) await s.sock.logout(); } catch {}
-  try { fs.rmSync(path.join(SESSIONS_DIR, id), { recursive: true, force: true }); } catch {}
-  s.status = 'logged-out';
-  s.qr = null;
-  s.sock = null;
-  io.to(sessionRoom(id)).emit('session:update', { id, status: s.status, me: null });
-  io.to(sessionRoom(id)).emit('session:qr', { id, dataURL: null });
-  res.json({ ok: true, id, status: s.status });
+// Pause AI
+app.post('/pause-ai', (req, res) => {
+  isAIEnabled = false;
+  res.json({ status: 'AI paused' });
+});
+
+// Resume AI
+app.post('/resume-ai', (req, res) => {
+  isAIEnabled = true;
+  res.json({ status: 'AI resumed' });
+});
+
+// ---------- DeepSeek Integration Route ----------
+// DeepSeek integration to handle AI responses for lead collection
+app.post('/deepseek', async (req, res) => {
+  const { message, context } = req.body;
+  const aiResponse = await sendToDeepSeek(message, context);
+  res.json({ reply: aiResponse });
 });
 
 // ---------- Socket.IO: subscribe to a session room ----------

@@ -1,72 +1,335 @@
 <!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="utf-8" />
-    <title>WhatsApp Multi-Session (Baileys)</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <style>
-      * { box-sizing: border-box; }
-      body { font-family: system-ui, Arial, sans-serif; margin: 0; padding: 16px; }
-      .card { max-width: 720px; margin: 0 auto; padding: 16px; border: 1px solid #ddd; border-radius: 12px; }
-      label { display: block; margin-bottom: 6px; font-weight: 600; }
-      input, button, textarea { width: 100%; padding: 10px; margin-bottom: 12px; }
-      button { cursor: pointer; }
-      img { display: block; margin: 8px 0; max-width: 300px; }
-      .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-      .muted { color: #666; font-size: 12px; }
-      .status { padding: 6px 10px; border-radius: 6px; display: inline-block; background: #f3f3f3; }
-      .ok { color: #0a0; }
-      .warn { color: #a60; }
-    </style>
-  </head>
-  <body>
-    <div class="card">
-      <h2>WhatsApp Multi-Session (Baileys)</h2>
-      <p class="muted">
-        1) Enter a <b>Session ID</b> (any unique label).<br/>
-        2) Click <b>Start Session</b> and scan the QR in WhatsApp ➜ <em>Linked devices</em>.<br/>
-        3) When status is <b class="ok">open</b>, you can send messages.
-      </p>
+<html lang="en">
 
-      <label>Session ID</label>
-      <input id="sessionId" placeholder="e.g. 2782XXXXXXX or any unique label" />
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WhatsApp Multi-Session with DeepSeek AI</title>
 
-      <div class="row">
-        <button id="startBtn">Start Session</button>
-        <button id="statusBtn">Subscribe (Socket)</button>
-      </div>
+  <!-- External library for Socket.IO -->
+  <script src="https://cdn.socket.io/4.0.1/socket.io.min.js"></script>
 
-      <div id="status" class="status">Status: <span id="statusText">—</span></div>
-      <div id="me" class="muted" style="margin-top:8px;">Me: <span id="meVal">—</span></div>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f0f0f0;
+      margin: 0;
+      padding: 0;
+    }
 
-      <div id="qrWrap" style="margin-top:12px; display:none;">
-        <div>Scan this QR in WhatsApp ➜ Linked devices</div>
-        <img id="qrImg" alt="QR will appear here" />
-      </div>
+    h1 {
+      text-align: center;
+      color: #333;
+      padding: 20px;
+      background-color: #4CAF50;
+      color: white;
+    }
 
-      <hr/>
+    .container {
+      width: 80%;
+      margin: 0 auto;
+      padding: 20px;
+      background-color: white;
+      border-radius: 8px;
+      box-shadow: 0px 4px 12px rgba(0, 0, 0, 0.1);
+    }
 
-      <h3>Send Message</h3>
-      <label>To (phone number)</label>
-      <input id="to" placeholder="e.g. 2782XXXXXXX" />
-      <label>Text</label>
-      <textarea id="text" rows="3" placeholder="Hello from Baileys!"></textarea>
-      <button id="sendBtn">Send</button>
+    .input-group {
+      margin-bottom: 15px;
+    }
 
-      <p class="muted">Note: number must be on WhatsApp. Avoid spam.</p>
+    label {
+      font-size: 16px;
+      color: #333;
+    }
 
-      <hr/>
+    input[type="text"], select {
+      width: 100%;
+      padding: 10px;
+      margin-top: 5px;
+      border-radius: 4px;
+      border: 1px solid #ccc;
+    }
 
-      <h3>Incoming (live)</h3>
-      <pre id="live" style="white-space:pre-wrap;background:#f8f8f8;padding:10px;border-radius:8px;min-height:80px;"></pre>
+    button {
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      margin-top: 10px;
+      cursor: pointer;
+      border-radius: 4px;
+    }
 
-      <h3>Fetch last 50 (HTTP)</h3>
-      <button id="loadMsgsBtn">Load Messages</button>
-      <pre id="msgs" style="white-space:pre-wrap;background:#f8f8f8;padding:10px;border-radius:8px;min-height:80px;"></pre>
+    button:hover {
+      background-color: #45a049;
+    }
+
+    .status-section {
+      margin-top: 20px;
+      background-color: #f4f4f4;
+      padding: 15px;
+      border-radius: 4px;
+    }
+
+    .qr-section {
+      display: none;
+      text-align: center;
+      margin-top: 20px;
+    }
+
+    .live-section {
+      margin-top: 20px;
+      background-color: #f4f4f4;
+      padding: 15px;
+      border-radius: 4px;
+      max-height: 200px;
+      overflow-y: scroll;
+    }
+
+    .button-group {
+      margin-top: 20px;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .button-group button {
+      margin-right: 10px;
+    }
+
+    .lead-section {
+      margin-top: 40px;
+      text-align: center;
+    }
+
+    .lead-section select,
+    .lead-section button {
+      margin: 10px 0;
+    }
+
+    pre {
+      background-color: #f0f0f0;
+      padding: 10px;
+      border-radius: 4px;
+      font-size: 14px;
+      color: #333;
+    }
+
+    #pauseAI,
+    #resumeAI {
+      width: 45%;
+    }
+  </style>
+</head>
+
+<body>
+
+  <h1>WhatsApp Multi-Session with DeepSeek AI</h1>
+
+  <div class="container">
+    <!-- Session Management Section -->
+    <div class="input-group">
+      <label for="sessionId">Enter Session ID:</label>
+      <input type="text" id="sessionId" placeholder="Enter phone number" />
+      <button id="startBtn">Start Session</button>
+      <button id="statusBtn">Subscribe to Session</button>
     </div>
 
-    <!-- Socket.IO client -->
-    <script src="/socket.io/socket.io.js"></script>
-    <script src="./app.js"></script>
-  </body>
+    <!-- Status and QR Code Section -->
+    <div class="status-section">
+      <p>Status: <span id="statusText">—</span></p>
+      <p>Me: <span id="meVal">—</span></p>
+    </div>
+    <div class="qr-section" id="qrWrap">
+      <img id="qrImg" src="" alt="QR Code" />
+    </div>
+
+    <!-- Messaging Section -->
+    <div class="input-group">
+      <label for="to">To:</label>
+      <input type="text" id="to" placeholder="Enter recipient's phone number" />
+      <label for="text">Text:</label>
+      <input type="text" id="text" placeholder="Enter message" />
+      <button id="sendBtn">Send Message</button>
+      <button id="loadMsgsBtn">Load Messages</button>
+    </div>
+
+    <!-- Live Messages Section -->
+    <div class="live-section">
+      <h2>Live Messages</h2>
+      <pre id="live"></pre>
+      <pre id="msgs"></pre>
+    </div>
+
+    <!-- Lead Collection Section -->
+    <div class="lead-section">
+      <label for="industry">Select Industry:</label>
+      <select id="industry">
+        <option value="sales">Sales Agent</option>
+        <option value="plumber">Plumber</option>
+      </select>
+      <button id="collectLead">Submit Lead</button>
+    </div>
+
+    <!-- AI Control Buttons -->
+    <div class="button-group">
+      <button id="pauseAI">Pause AI</button>
+      <button id="resumeAI">Resume AI</button>
+    </div>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+
+    const sessionIdEl = $('sessionId');
+    const startBtn = $('startBtn');
+    const statusBtn = $('statusBtn');
+    const statusText = $('statusText');
+    const meVal = $('meVal');
+    const qrWrap = $('qrWrap');
+    const qrImg = $('qrImg');
+
+    const toEl = $('to');
+    const textEl = $('text');
+    const sendBtn = $('sendBtn');
+
+    const liveEl = $('live');
+    const loadMsgsBtn = $('loadMsgsBtn');
+    const msgsEl = $('msgs');
+
+    const industryEl = $('industry');
+    const collectLeadBtn = $('collectLead');
+    const pauseAIBtn = $('pauseAI');
+    const resumeAIBtn = $('resumeAI');
+
+    const socket = io(); // Connect to Socket.io server
+
+    // Update Status UI
+    function updateStatusUI({ status, me }) {
+      statusText.textContent = status || '—';
+      meVal.textContent = me || '—';
+      if (status === 'qr') {
+        qrWrap.style.display = 'block';
+      } else {
+        qrWrap.style.display = 'none';
+        qrImg.src = '';
+      }
+    }
+
+    // Listen for session status updates
+    socket.on('session:update', (payload) => {
+      if (!payload) return;
+      updateStatusUI(payload);
+    });
+
+    // Listen for QR code updates
+    socket.on('session:qr', (payload) => {
+      if (!payload) return;
+      if (payload.dataURL) {
+        qrWrap.style.display = 'block';
+        qrImg.src = payload.dataURL;
+      } else {
+        qrWrap.style.display = 'none';
+        qrImg.src = '';
+      }
+    });
+
+    // Listen for incoming messages
+    socket.on('session:message', (payload) => {
+      if (!payload || !payload.message) return;
+      const { message } = payload;
+      const line = `[${message.messageTimestamp}] from=${message.from} name=${message.pushName || ''} text=${message.text || ''}\n`;
+      liveEl.textContent += line;
+    });
+
+    // Helper for fetch API calls
+    async function jsonFetch(url, options) {
+      const r = await fetch(url, options);
+      if (!r.ok) throw new Error(await r.text());
+      return r.json();
+    }
+
+    // Start a session and subscribe to it
+    async function startSession() {
+      const id = sessionIdEl.value.trim();
+      if (!id) return alert('Enter a Session ID');
+      await jsonFetch(`/session/${encodeURIComponent(id)}/start`, { method: 'POST' });
+      socket.emit('session:subscribe', id); // Subscribe after starting
+    }
+
+    // Subscribe to an existing session
+    function subscribe() {
+      const id = sessionIdEl.value.trim();
+      if (!id) return alert('Enter a Session ID');
+      socket.emit('session:subscribe', id);
+    }
+
+    // Send a message to the recipient
+    async function sendMessage() {
+      const id = sessionIdEl.value.trim();
+      if (!id) return alert('Enter a Session ID');
+      const to = toEl.value.trim();
+      const text = textEl.value;
+      if (!to || !text) return alert('Provide "to" and "text"');
+      await jsonFetch(`/session/${encodeURIComponent(id)}/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to, text })
+      });
+      alert('Sent (or queued).');
+    }
+
+    // Load messages for the session
+    async function loadMessages() {
+      const id = sessionIdEl.value.trim();
+      if (!id) return alert('Enter a Session ID');
+      const r = await jsonFetch(`/session/${encodeURIComponent(id)}/messages`);
+      msgsEl.textContent = JSON.stringify(r.messages || [], null, 2);
+    }
+
+    // Handle the collection of leads based on industry selection
+    async function collectLead() {
+      const industry = industryEl.value;
+      const phoneNumber = sessionIdEl.value.trim();
+
+      // Send to DeepSeek AI
+      const context = industry === 'sales' ? "You are a sales agent." : "You are a plumber.";
+      const message = `User selected ${industry} as their industry. Lead: ${phoneNumber}`;
+
+      const aiResponse = await sendToDeepSeek(message, context);
+      alert(`Lead submitted! AI Response: ${aiResponse}`);
+    }
+
+    // Pause AI
+    function pauseAI() {
+      fetch('/pause-ai', { method: 'POST' }).then(response => response.json()).then(data => alert(data.status));
+    }
+
+    // Resume AI
+    function resumeAI() {
+      fetch('/resume-ai', { method: 'POST' }).then(response => response.json()).then(data => alert(data.status));
+    }
+
+    // Send message to DeepSeek AI
+    async function sendToDeepSeek(message, context) {
+      const response = await fetch('/deepseek', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message, context })
+      });
+      const data = await response.json();
+      return data.reply;
+    }
+
+    // Event Listeners
+    startBtn.addEventListener('click', startSession);
+    statusBtn.addEventListener('click', subscribe);
+    sendBtn.addEventListener('click', sendMessage);
+    loadMsgsBtn.addEventListener('click', loadMessages);
+    collectLeadBtn.addEventListener('click', collectLead);
+    pauseAIBtn.addEventListener('click', pauseAI);
+    resumeAIBtn.addEventListener('click', resumeAI);
+  </script>
+
+</body>
 </html>
