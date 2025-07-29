@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>WhatsApp Multi-Session (Baileys)</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      * { box-sizing: border-box; }
+      body { font-family: system-ui, Arial, sans-serif; margin: 0; padding: 16px; }
+      .card { max-width: 720px; margin: 0 auto; padding: 16px; border: 1px solid #ddd; border-radius: 12px; }
+      label { display: block; margin-bottom: 6px; font-weight: 600; }
+      input, button, textarea { width: 100%; padding: 10px; margin-bottom: 12px; }
+      button { cursor: pointer; }
+      img { display: block; margin: 8px 0; max-width: 300px; }
+      .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+      .muted { color: #666; font-size: 12px; }
+      .status { padding: 6px 10px; border-radius: 6px; display: inline-block; background: #f3f3f3; }
+      .ok { color: #0a0; }
+      .warn { color: #a60; }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h2>WhatsApp Multi-Session (Baileys)</h2>
+      <p class="muted">
+        1) Enter a <b>Session ID</b> (any unique label).<br/>
+        2) Click <b>Start Session</b> and scan the QR in WhatsApp ➜ <em>Linked devices</em>.<br/>
+        3) When status is <b class="ok">open</b>, you can send messages.
+      </p>
+
+      <label>Session ID</label>
+      <input id="sessionId" placeholder="e.g. 2782XXXXXXX or any unique label" />
+
+      <div class="row">
+        <button id="startBtn">Start Session</button>
+        <button id="statusBtn">Subscribe (Socket)</button>
+      </div>
+
+      <div id="status" class="status">Status: <span id="statusText">—</span></div>
+      <div id="me" class="muted" style="margin-top:8px;">Me: <span id="meVal">—</span></div>
+
+      <div id="qrWrap" style="margin-top:12px; display:none;">
+        <div>Scan this QR in WhatsApp ➜ Linked devices</div>
+        <img id="qrImg" alt="QR will appear here" />
+      </div>
+
+      <hr/>
+
+      <h3>Send Message</h3>
+      <label>To (phone number)</label>
+      <input id="to" placeholder="e.g. 2782XXXXXXX" />
+      <label>Text</label>
+      <textarea id="text" rows="3" placeholder="Hello from Baileys!"></textarea>
+      <button id="sendBtn">Send</button>
+
+      <p class="muted">Note: number must be on WhatsApp. Avoid spam.</p>
+
+      <hr/>
+
+      <h3>Incoming (live)</h3>
+      <pre id="live" style="white-space:pre-wrap;background:#f8f8f8;padding:10px;border-radius:8px;min-height:80px;"></pre>
+
+      <h3>Fetch last 50 (HTTP)</h3>
+      <button id="loadMsgsBtn">Load Messages</button>
+      <pre id="msgs" style="white-space:pre-wrap;background:#f8f8f8;padding:10px;border-radius:8px;min-height:80px;"></pre>
+    </div>
+
+    <!-- Socket.IO client -->
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="./app.js"></script>
+  </body>
+</html>
