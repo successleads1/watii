@@ -1,12 +1,33 @@
-# Node.js
+# Node / tooling
 node_modules/
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+package-lock.json
+# keep the lock file tracked (recommended) -> remove the line above if you want it tracked
+
+# Env files (keep an example file tracked)
 .env
-npm-debug.log
-yarn-error.log
+.env.*
+!.env.example
 
-# VS Code
+# Next.js output
+.next/
+out/
+dist/
+coverage/
+
+# Logs & PIDs
+logs/
+*.log
+*.pid
+*.seed
+*.pid.lock
+
+# Baileys session/auth (VERY important)
+sessions/
+
+# Editors/OS
 .vscode/
-
-# Operating System Files
 .DS_Store
 Thumbs.db
